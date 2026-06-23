@@ -1,0 +1,110 @@
+basePath: /
+definitions:
+  main.Transaction:
+    properties:
+      data_criacao:
+        example: "2026-06-23T16:00:00Z"
+        type: string
+      descricao:
+        example: Salário
+        type: string
+      id:
+        example: 1
+        type: integer
+      tipo:
+        enum:
+        - receita
+        - despesa
+        example: receita
+        type: string
+      usuario_id:
+        example: 42
+        type: integer
+      valor:
+        example: 1500.5
+        type: number
+    type: object
+  main.TransactionInput:
+    properties:
+      descricao:
+        example: Salário
+        type: string
+      tipo:
+        enum:
+        - receita
+        - despesa
+        example: receita
+        type: string
+      usuario_id:
+        example: 42
+        type: integer
+      valor:
+        example: 1500.5
+        type: number
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: lbritogit@gmail.com
+    name: Suporte
+  description: API para gerenciamento de transações financeiras (receitas e despesas).
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Transactions API
+  version: "1.0"
+paths:
+  /transactions:
+    get:
+      description: Retorna todas as transações ordenadas pela data de criação (mais
+        recentes primeiro).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.Transaction'
+            type: array
+        "500":
+          description: Erro interno ao buscar transações
+          schema:
+            type: string
+      summary: Lista as transações
+      tags:
+      - transactions
+    post:
+      consumes:
+      - application/json
+      description: Registra uma nova transação financeira. O campo "tipo" deve ser
+        "receita" ou "despesa".
+      parameters:
+      - description: Dados da transação
+        in: body
+        name: transaction
+        required: true
+        schema:
+          $ref: '#/definitions/main.TransactionInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/main.Transaction'
+        "400":
+          description: Dados inválidos
+          schema:
+            type: string
+        "500":
+          description: Erro interno ao salvar a transação
+          schema:
+            type: string
+      summary: Cria uma transação
+      tags:
+      - transactions
+schemes:
+- http
+swagger: "2.0"

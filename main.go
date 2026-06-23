@@ -10,23 +10,48 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	httpSwagger "github.com/swaggo/http-swagger"
+
+	_ "transactions/docs"
 )
 
 type Transaction struct {
-	ID          int       `json:"id"`
-	UsuarioID   int       `json:"usuario_id"`
-	Tipo        string    `json:"tipo"`
-	Valor       float64   `json:"valor"`
-	Descricao   string    `json:"descricao"`
-	DataCriacao time.Time `json:"data_criacao"`
+	ID          int       `json:"id" example:"1"`
+	UsuarioID   int       `json:"usuario_id" example:"2"`
+	Tipo        string    `json:"tipo" example:"receita" enums:"receita,despesa"`
+	Valor       float64   `json:"valor" example:"1500.50"`
+	Descricao   string    `json:"descricao" example:"Salário"`
+	DataCriacao time.Time `json:"data_criacao" example:"2026-06-23T16:00:00Z"`
+}
+
+type TransactionInput struct {
+	UsuarioID int     `json:"usuario_id" example:"2"`
+	Tipo      string  `json:"tipo" example:"receita" enums:"receita,despesa"`
+	Valor     float64 `json:"valor" example:"1500.50"`
+	Descricao string  `json:"descricao" example:"Salário"`
 }
 
 var db *sql.DB
 
+// @title           Transactions API
+// @version         1.0
+// @description     API para gerenciamento de transações financeiras (receitas e despesas).
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   Suporte
+// @contact.email  lbritogit@gmail.com
+
+// @license.name  MIT
+// @license.url   https://opensource.org/licenses/MIT
+
+// @host      localhost:8080
+// @BasePath  /
+
+// @schemes http
 func main() {
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
-		connStr = "postgres://postgres:postgres@localhost:5432/financeiro?sslmode=disable"
+		connStr = "postgres://financeiro:financeiro@localhost:5434/financeiro?sslmode=disable"
 	}
 
 	var err error
@@ -41,8 +66,10 @@ func main() {
 	}
 
 	http.HandleFunc("/transactions", transactionsHandler)
+	http.Handle("/docs/", httpSwagger.WrapHandler)
 
 	fmt.Println("Servidor rodando na porta 8080...")
+	fmt.Println("Documentação Swagger disponível em http://localhost:8080/docs/index.html")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -56,10 +83,18 @@ func transactionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// getTransactions godoc
+// @Summary      Lista as transações
+// @Description  Retorna todas as transações ordenadas pela data de criação (mais recentes primeiro).
+// @Tags         transactions
+// @Produce      json
+// @Success      200  {array}   Transaction
+// @Failure      500  {string}  string  "Erro interno ao buscar transações"
+// @Router       /transactions [get]
 func getTransactions(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
-		SELECT id, usuario_id, tipo, valor, descricao, data_criacao 
-		FROM operacoes 
+		SELECT id, usuario_id, tipo, valor, descricao, data_criacao
+		FROM operacoes
 		ORDER BY data_criacao DESC
 	`)
 	if err != nil {
@@ -90,27 +125,45 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(transactions)
 }
 
+// addTransaction godoc
+// @Summary      Cria uma transação
+// @Description  Registra uma nova transação financeira. O campo "tipo" deve ser "receita" ou "despesa".
+// @Tags         transactions
+// @Accept       json
+// @Produce      json
+// @Param        transaction  body      TransactionInput  true  "Dados da transação"
+// @Success      201          {object}  Transaction
+// @Failure      400          {string}  string  "Dados inválidos"
+// @Failure      500          {string}  string  "Erro interno ao salvar a transação"
+// @Router       /transactions [post]
 func addTransaction(w http.ResponseWriter, r *http.Request) {
-	var t Transaction
-	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+	var input TransactionInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "Erro ao decodificar JSON", http.StatusBadRequest)
 		return
 	}
 
-	if t.Tipo != "receita" && t.Tipo != "despesa" {
+	if input.Tipo != "receita" && input.Tipo != "despesa" {
 		http.Error(w, "Tipo deve ser 'receita' ou 'despesa'", http.StatusBadRequest)
 		return
 	}
 
 	var desc sql.NullString
-	if t.Descricao != "" {
-		desc.String = t.Descricao
+	if input.Descricao != "" {
+		desc.String = input.Descricao
 		desc.Valid = true
 	}
 
+	t := Transaction{
+		UsuarioID: input.UsuarioID,
+		Tipo:      input.Tipo,
+		Valor:     input.Valor,
+		Descricao: input.Descricao,
+	}
+
 	err := db.QueryRow(`
-		INSERT INTO operacoes (usuario_id, tipo, valor, descricao) 
-		VALUES ($1, $2, $3, $4) 
+		INSERT INTO operacoes (usuario_id, tipo, valor, descricao)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, data_criacao
 	`, t.UsuarioID, t.Tipo, t.Valor, desc).Scan(&t.ID, &t.DataCriacao)
 
